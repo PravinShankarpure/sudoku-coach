@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3b4cca">
+<meta name="description" content="Sudoku with a built-in coach that guides you step by step. Easy, Intermediate and Difficult levels.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sudoku Coach">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233b4cca'/%3E%3Cpath d='M26 10v44M38 10v44M10 26h44M10 38h44' stroke='%23fff' stroke-opacity='.45' stroke-width='2.5'/%3E%3Crect x='26' y='26' width='12' height='12' fill='%23ffd166'/%3E%3C/svg%3E">
+<title>Sudoku Coach</title>
+<style>
+:root{
+  --bg:#f5f3ee;--surface:#fff;--ink:#1f2330;--muted:#6b7080;--line:#d3d0c7;--thick:#2a2f3f;
+  --accent:#3b4cca;--on-accent:#fff;--accent-soft:#e4e7fb;
+  --peer:#eef0f6;--same:#d3d9f7;--sel:#b4bef4;--given:#1f2330;--user:#3b4cca;
+  --bad:#cf3434;--bad-soft:#fde3e3;--good:#178a55;--good-soft:#d6f2e4;
+  --unit:#fff3c9;--pattern:#ffd97a;--shadow:0 6px 24px rgba(31,35,48,.08);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#13151c;--surface:#1c1f28;--ink:#e8eaf2;--muted:#9aa0b3;--line:#363a48;--thick:#b9bdd3;
+  --accent:#8d98ff;--on-accent:#0e1130;--accent-soft:#272c52;
+  --peer:#222634;--same:#2d3360;--sel:#3b448d;--given:#eceef6;--user:#a3adff;
+  --bad:#ff7070;--bad-soft:#47232a;--good:#4fd396;--good-soft:#1a3a2c;
+  --unit:#38321e;--pattern:#6a5717;--shadow:0 6px 24px rgba(0,0,0,.35);
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-user-select:none;user-select:none;overscroll-behavior-y:none;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+[hidden]{display:none!important}
+.screen{display:none;min-height:100vh;min-height:100dvh}
+.screen.on{display:flex;flex-direction:column}
+
+/* ---------- Home ---------- */
+#home{align-items:center;justify-content:center;padding:28px 18px}
+.home-card{width:100%;max-width:440px}
+.brand{text-align:center;margin-bottom:26px}
+.brand svg{width:76px;height:76px;border-radius:18px;box-shadow:var(--shadow)}
+h1{font-size:clamp(28px,7vw,38px);letter-spacing:-.02em;margin:14px 0 6px}
+.sub{color:var(--muted);margin:0;font-size:16px;line-height:1.45}
+.q{font-weight:700;font-size:15px;margin:0 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.lvl{display:flex;align-items:center;gap:16px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);
+  border-radius:18px;padding:16px 18px;margin-bottom:12px;transition:transform .12s,border-color .15s,box-shadow .15s}
+.lvl:hover{border-color:var(--accent);box-shadow:var(--shadow)}
+.lvl:active{transform:scale(.985)}
+.lvl .meter{display:flex;gap:4px;align-items:flex-end;height:26px}
+.lvl .meter i{width:7px;border-radius:3px;background:var(--line)}
+.lvl .meter i:nth-child(1){height:10px}.lvl .meter i:nth-child(2){height:18px}.lvl .meter i:nth-child(3){height:26px}
+.lvl .meter i.on{background:var(--accent)}
+.lvl b{display:block;font-size:18px;margin-bottom:2px}
+.lvl span{font-size:14px;color:var(--muted);line-height:1.35;display:block}
+.lvl .go{margin-left:auto;color:var(--muted)}
+.primary{display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--accent);color:var(--on-accent);
+  border-radius:16px;padding:15px 18px;font-weight:700;font-size:16px;margin-bottom:22px}
+.primary span{opacity:.8;font-variant-numeric:tabular-nums;font-weight:600}
+.home-links{display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.link{color:var(--accent);font-weight:600;padding:10px 12px;border-radius:10px}
+.link:hover{background:var(--accent-soft)}
+
+/* ---------- Game ---------- */
+#game{--board:clamp(260px,min(calc(100vw - 24px),calc(100dvh - 340px - env(safe-area-inset-top) - env(safe-area-inset-bottom))),560px)}
+.bar{display:flex;align-items:center;gap:6px;padding:8px 10px;width:100%;max-width:1000px;margin:0 auto}
+.iconbtn{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;color:var(--ink)}
+.iconbtn:hover{background:var(--peer)}
+.bar .mid{flex:1;display:flex;align-items:center;gap:10px;min-width:0}
+.badge{font-size:13px;font-weight:700;padding:5px 10px;border-radius:99px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.stat{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat b{color:var(--ink)}
+.layout{flex:1;display:flex;flex-direction:column;align-items:center;gap:12px;padding:2px 12px 18px;width:100%;max-width:1000px;margin:0 auto}
+.side{width:var(--board);display:flex;flex-direction:column;gap:10px}
+
+.board{width:var(--board);height:var(--board);display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);
+  border:2.5px solid var(--thick);border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow);
+  --cs:calc(var(--board) / 9);touch-action:manipulation;flex:0 0 auto}
+.cell{position:relative;border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:grid;place-items:center;
+  font-size:calc(var(--cs) * .56);font-weight:500;color:var(--user);cursor:pointer;transition:background-color .12s}
+.cell:nth-child(9n){border-right:0}
+.cell:nth-child(n+73){border-bottom:0}
+.cell.br{border-right:2px solid var(--thick)}
+.cell.bb{border-bottom:2px solid var(--thick)}
+.cell.given{color:var(--given);font-weight:700}
+.cell.peer{background:var(--peer)}
+.cell.same{background:var(--same)}
+.cell.sel{background:var(--sel)}
+.cell.err{background:var(--bad-soft)}
+.cell.err .v{color:var(--bad)}
+.cell.hu{background:var(--unit)}
+.cell.hp{background:var(--pattern)}
+.cell.ht{background:var(--good-soft);box-shadow:inset 0 0 0 3px var(--good)}
+.cell.hb{background:var(--bad-soft);box-shadow:inset 0 0 0 3px var(--bad)}
+.cell.sel.hu,.cell.sel.hp{box-shadow:inset 0 0 0 2px var(--accent)}
+.cell .v{line-height:1}
+.cell .v:empty{display:none}
+.n{position:absolute;inset:2px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);place-items:center;
+  font-size:calc(var(--cs) * .25);line-height:1;color:var(--muted);font-weight:600;pointer-events:none}
+.n .k{color:var(--good);font-weight:900}
+.n .x{color:var(--bad);text-decoration:line-through;text-decoration-thickness:2px;font-weight:900}
+.n .m{color:var(--accent);font-weight:900}
+.cell.pop .v{animation:pop .25s ease}
+@keyframes pop{0%{transform:scale(.6)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+
+.coach{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:12px 14px;font-size:15px;line-height:1.5;user-select:text;-webkit-user-select:text}
+.coach.active{border-color:var(--accent);box-shadow:var(--shadow)}
+.coach p{margin:0 0 10px}
+.coach .idle{display:flex;gap:12px;align-items:flex-start}
+.coach .idle p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.coach .idle svg{flex:0 0 auto;color:var(--accent);margin-top:2px}
+.coach-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.tag{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.tag.lv0{background:var(--bad-soft);color:var(--bad)}
+.tag.lv1{background:var(--good-soft);color:var(--good)}
+.tag.lv3,.tag.lv4,.tag.lv5{background:var(--unit);color:var(--ink)}
+.stepn{font-size:13px;color:var(--muted)}
+.coach .x{margin-left:auto;width:32px;height:32px;border-radius:10px;font-size:22px;line-height:1;color:var(--muted)}
+.coach .x:hover{background:var(--peer)}
+.learn{font-size:13.5px;color:var(--muted);border-left:3px solid var(--accent-soft);padding-left:10px}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.btn{padding:10px 16px;border-radius:12px;font-weight:700;background:var(--peer);font-size:15px}
+.btn.pri{background:var(--accent);color:var(--on-accent)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:-2px 0 10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+
+.tools{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.tool{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px 7px;border-radius:14px;font-size:12px;font-weight:700;color:var(--muted)}
+.tool svg{color:var(--ink)}
+.tool:hover{background:var(--peer)}
+.tool.on{background:var(--accent-soft);color:var(--accent)}
+.tool.on svg{color:var(--accent)}
+.tool.hint{background:var(--accent);color:var(--on-accent)}
+.tool.hint svg{color:var(--on-accent)}
+.pad{display:grid;grid-template-columns:repeat(9,1fr);gap:5px}
+.pad button{position:relative;height:clamp(46px,calc(var(--board) / 7.5),64px);border-radius:12px;background:var(--surface);border:1.5px solid var(--line);
+  font-size:clamp(20px,calc(var(--board) / 15),30px);font-weight:700;color:var(--accent);transition:transform .08s}
+.pad button:active{transform:scale(.94)}
+.pad button small{position:absolute;bottom:2px;right:5px;font-size:10px;font-weight:600;color:var(--muted)}
+.pad button.done{opacity:.28}
+.notes-mode .pad button{color:var(--muted);border-style:dashed}
+
+@media (orientation:landscape) and (min-width:640px){
+  #game{--board:clamp(250px,min(calc(100dvh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),calc(100vw - 400px)),680px)}
+  .layout{flex-direction:row;align-items:flex-start;justify-content:center;gap:20px}
+  .side{width:auto;flex:0 1 350px;min-width:280px}
+  .pad{grid-template-columns:repeat(3,1fr);gap:7px}
+  .pad button{height:clamp(44px,calc((100dvh - 330px) / 3),70px)}
+}
+
+/* ---------- Overlays ---------- */
+.ov{position:fixed;inset:0;background:rgba(10,12,20,.5);display:none;align-items:flex-end;justify-content:center;z-index:30;padding:14px;
+  padding-bottom:max(14px,env(safe-area-inset-bottom))}
+.ov.on{display:flex}
+@media (min-width:600px){.ov{align-items:center}}
+.modal{background:var(--surface);border-radius:22px;max-width:540px;width:100%;max-height:86dvh;overflow:auto;padding:22px 20px 18px;
+  user-select:text;-webkit-user-select:text;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:up .2s ease}
+@keyframes up{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+.modal h2{margin:0 0 12px;font-size:22px}
+.modal h3{margin:20px 0 6px;font-size:16px}
+.modal p,.modal li{line-height:1.5;font-size:15px}
+.modal ul{padding-left:20px;margin:6px 0}
+.modal dl{margin:0}.modal dt{font-weight:700;margin-top:10px}.modal dd{margin:2px 0 0;color:var(--muted);font-size:14.5px;line-height:1.45}
+.modal .acts{margin-top:18px}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.toggle input{width:44px;height:26px;appearance:none;-webkit-appearance:none;background:var(--line);border-radius:99px;position:relative;cursor:pointer;flex:0 0 auto;transition:background .15s}
+.toggle input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .15s}
+.toggle input:checked{background:var(--accent)}
+.toggle input:checked::after{transform:translateX(18px)}
+kbd{font:inherit;font-size:13px;background:var(--peer);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+.win{text-align:center}
+.win .big{font-size:44px;margin:4px 0}
+.stats{display:flex;justify-content:center;gap:10px;margin:16px 0;flex-wrap:wrap}
+.stats div{background:var(--peer);border-radius:14px;padding:10px 16px;min-width:88px}
+.stats b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.stats span{font-size:12.5px;color:var(--muted)}
+.win .acts{justify-content:center}
+.loading{background:var(--surface);border-radius:20px;padding:26px 30px;text-align:center;font-weight:600;align-self:center}
+.spin{width:38px;height:38px;border-radius:50%;border:4px solid var(--accent-soft);border-top-color:var(--accent);margin:0 auto 14px;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);
+  padding:10px 18px;border-radius:99px;font-weight:600;font-size:14.5px;opacity:0;pointer-events:none;transition:all .2s;z-index:40;white-space:nowrap}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3b4cca"/><path d="M26 10v44M38 10v44M10 26h44M10 38h44" stroke="#fff" stroke-opacity=".45" stroke-width="2.5"/><rect x="26" y="26" width="12" height="12" fill="#ffd166"/><circle cx="18" cy="18" r="3" fill="#fff"/><circle cx="46" cy="46" r="3" fill="#fff"/><circle cx="46" cy="18" r="3" fill="#fff" fill-opacity=".6"/></symbol>
+</svg>
+
+<!-- ============ HOME: difficulty choice ============ -->
+<section id="home" class="screen on" aria-label="Choose difficulty">
+  <div class="home-card">
+    <div class="brand">
+      <svg><use href="#logo"/></svg>
+      <h1>Sudoku Coach</h1>
+      <p class="sub">Play at your level. Whenever you're stuck, I'll guide you one logical step at a time.</p>
+    </div>
+    <button id="continue" class="primary" hidden></button>
+    <p class="q">Choose your difficulty</p>
+    <button class="lvl" data-level="easy"><div class="meter"><i class="on"></i><i></i><i></i></div>
+      <div><b>Easy</b><span>Plenty of clues. Solvable with singles only, ideal for learning.</span></div><svg viewBox="0 0 24 24" class="i go"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button class="lvl" data-level="medium"><div class="meter"><i class="on"></i><i class="on"></i><i></i></div>
+      <div><b>Intermediate</b><span>Fewer clues. Needs pairs, pointing and box/line patterns.</span></div><svg viewBox="0 0 24 24" class="i go"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button class="lvl" data-level="hard"><div class="meter"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      <div><b>Difficult</b><span>Sparse grid. Calls for X-Wings, Y-Wings and "what if" reasoning.</span></div><svg viewBox="0 0 24 24" class="i go"><path d="M9 6l6 6-6 6"/></svg></button>
+    <div class="home-links">
+      <button class="link" data-open="#m-help">How to play</button>
+      <button class="link" id="install" hidden>Install app</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GAME ============ -->
+<section id="game" class="screen" aria-label="Sudoku game">
+  <header class="bar">
+    <button class="iconbtn" id="b-home" aria-label="Back to difficulty menu"><svg viewBox="0 0 24 24" class="i"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div class="mid">
+      <span class="badge" id="lvl-badge">Easy</span>
+      <span class="stat"><svg viewBox="0 0 24 24" class="i" style="width:15px;height:15px;vertical-align:-2px"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2h4"/></svg> <b id="timer">0:00</b></span>
+      <span class="stat">Mistakes <b id="mistakes">0</b></span>
+    </div>
+    <button class="iconbtn" data-open="#m-help" aria-label="How to play and settings"><svg viewBox="0 0 24 24" class="i"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5"/><path d="M12 17h.01"/></svg></button>
+  </header>
+  <main class="layout">
+    <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+    <aside class="side">
+      <div id="coach" class="coach" aria-live="polite"></div>
+      <div class="tools">
+        <button class="tool" data-t="undo"><svg viewBox="0 0 24 24" class="i"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Undo</button>
+        <button class="tool" data-t="erase"><svg viewBox="0 0 24 24" class="i"><path d="M20 20H8.5L3.7 15.2a2 2 0 0 1 0-2.8l8.7-8.7a2 2 0 0 1 2.8 0l5.1 5.1a2 2 0 0 1 0 2.8L12 20"/><path d="M7.5 10.5l6 6"/></svg>Erase</button>
+        <button class="tool" data-t="notes" id="t-notes"><svg viewBox="0 0 24 24" class="i"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>Notes</button>
+        <button class="tool" data-t="fill"><svg viewBox="0 0 24 24" class="i"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01" stroke-width="2.6"/></svg>Candidates</button>
+        <button class="tool hint" data-t="hint"><svg viewBox="0 0 24 24" class="i"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg>Hint</button>
+      </div>
+      <div class="pad" id="pad"></div>
+    </aside>
+  </main>
+</section>
+
+<!-- ============ MODALS ============ -->
+<div class="ov" id="m-help" role="dialog" aria-modal="true" aria-label="How to play">
+  <div class="modal">
+    <h2>How to play</h2>
+    <p>Fill the grid so every <b>row</b>, every <b>column</b> and every <b>3×3 box</b> contains the digits 1 to 9 exactly once.</p>
+    <h3>Controls</h3>
+    <ul>
+      <li>Tap a cell, then tap a number. Tap the same number again to remove it.</li>
+      <li><b>Notes</b> switches to pencil marks, so you can jot down possible digits.</li>
+      <li><b>Candidates</b> fills in every possible digit for you.</li>
+      <li><b>Hint</b> starts the coach. First it tells you <i>where to look</i>. Tap <i>Show me why</i> for the full reasoning, then fill in the answer or do it yourself.</li>
+    </ul>
+    <h3>Reading the coach</h3>
+    <p><b>R3C5</b> means row 3, column 5. Rows count from the top and columns from the left. Boxes are numbered 1 to 9 like reading a page.</p>
+    <div class="legend" style="margin-top:6px"><span><i style="background:var(--unit)"></i>Area to study</span><span><i style="background:var(--pattern)"></i>Key cells</span><span><i style="background:var(--good-soft);box-shadow:inset 0 0 0 2px var(--good)"></i>Answer cell</span><span><b style="color:var(--bad);text-decoration:line-through">7</b> candidate removed</span></div>
+    <h3>Techniques the coach teaches</h3>
+    <dl id="glossary"></dl>
+    <h3>Settings</h3>
+    <label class="toggle">Show mistakes immediately<input type="checkbox" id="s-mistakes"></label>
+    <label class="toggle">Highlight matching numbers<input type="checkbox" id="s-same"></label>
+    <h3>Keyboard</h3>
+    <p><kbd>1</kbd>–<kbd>9</kbd> enter &nbsp; <kbd>←↑→↓</kbd> move &nbsp; <kbd>Backspace</kbd> erase &nbsp; <kbd>N</kbd> notes &nbsp; <kbd>H</kbd> hint &nbsp; <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo</p>
+    <h3>Install on your phone</h3>
+    <p><b>Android, Windows, ChromeOS, Linux:</b> open the app in Chrome or Edge and choose <i>Install app</i> (or <i>Add to Home screen</i>).<br><b>iPhone and iPad:</b> open it in Safari, tap Share, then <i>Add to Home Screen</i>.<br><b>Mac:</b> Safari → File → <i>Add to Dock</i>, or install from Chrome.</p>
+    <div class="acts"><button class="btn pri" data-close>Done</button></div>
+  </div>
+</div>
+
+<div class="ov" id="m-win" role="dialog" aria-modal="true" aria-label="Puzzle solved">
+  <div class="modal win">
+    <div class="big">★</div>
+    <h2>Solved!</h2>
+    <p id="win-msg"></p>
+    <div class="stats" id="win-stats"></div>
+    <div class="acts">
+      <button class="btn pri" id="w-again">Another puzzle</button>
+      <button class="btn" id="w-menu">Change difficulty</button>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="m-loading" aria-live="polite"><div class="loading"><div class="spin"></div><span id="loading-text">Building your puzzle…</span></div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<!-- ============ ENGINE (pure logic, no DOM) ============ -->
+<script id="engine">
+const Engine = (() => {
+  'use strict';
+  const ALL = 0x3FE;
+  const RI = [], CI = [], BI = [];
+  for (let i = 0; i < 81; i++) { RI[i] = (i / 9) | 0; CI[i] = i % 9; BI[i] = ((RI[i] / 3) | 0) * 3 + ((CI[i] / 3) | 0); }
+  const UNITS = [];
+  for (let r = 0; r < 9; r++) { const u = []; for (let c = 0; c < 9; c++) u.push(r * 9 + c); UNITS.push(u); }
+  for (let c = 0; c < 9; c++) { const u = []; for (let r = 0; r < 9; r++) u.push(r * 9 + c); UNITS.push(u); }
+  for (let b = 0; b < 9; b++) { const u = [], br = ((b / 3) | 0) * 3, bc = (b % 3) * 3; for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) u.push((br + r) * 9 + bc + c); UNITS.push(u); }
+  const CU = i => [RI[i], 9 + CI[i], 18 + BI[i]];
+  const PEERS = [];
+  for (let i = 0; i < 81; i++) { const s = new Set(); for (const u of CU(i)) for (const j of UNITS[u]) if (j !== i) s.add(j); PEERS.push([...s]); }
+  const sees = (a, b) => a !== b && (RI[a] === RI[b] || CI[a] === CI[b] || BI[a] === BI[b]);
+  const pop = m => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+  const digs = m => { const a = []; for (let d = 1; d <= 9; d++) if (m & (1 << d)) a.push(d); return a; };
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const uName = u => u < 9 ? `row ${u + 1}` : u < 18 ? `column ${u - 8}` : `box ${u - 17}`;
+  const uType = u => u < 9 ? 'row' : u < 18 ? 'column' : 'box';
+  const cName = i => `R${RI[i] + 1}C${CI[i] + 1}`;
+  const list = a => a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  const B = s => `<b>${s}</b>`;
+  const elimList = el => {
+    const by = {}; el.forEach(({ i, d }) => (by[d] = by[d] || []).push(cName(i)));
+    return Object.keys(by).map(d => `${B(d)} from ${list(by[d])}`).join('; ');
+  };
+
+  /* ---------- Backtracking solver (counting / random fill) ---------- */
+  function search(grid, limit, random) {
+    const b = grid.slice(), rm = new Int32Array(9), cm = new Int32Array(9), xm = new Int32Array(9);
+    for (let i = 0; i < 81; i++) if (b[i]) { const bit = 1 << b[i]; rm[RI[i]] |= bit; cm[CI[i]] |= bit; xm[BI[i]] |= bit; }
+    let count = 0, first = null;
+    const order = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    (function rec() {
+      let best = -1, bm = 0, bn = 10;
+      for (let i = 0; i < 81; i++) {
+        if (b[i]) continue;
+        const m = ALL & ~(rm[RI[i]] | cm[CI[i]] | xm[BI[i]]);
+        if (!m) return;
+        const n = pop(m);
+        if (n < bn) { bn = n; best = i; bm = m; if (n === 1) break; }
+      }
+      if (best < 0) { count++; if (!first) first = b.slice(); return; }
+      const r = RI[best], c = CI[best], x = BI[best];
+      for (const d of (random ? shuffle(order.slice()) : order)) {
+        const bit = 1 << d; if (!(bm & bit)) continue;
+        b[best] = d; rm[r] |= bit; cm[c] |= bit; xm[x] |= bit;
+        rec();
+        b[best] = 0; rm[r] &= ~bit; cm[c] &= ~bit; xm[x] &= ~bit;
+        if (count >= limit) return;
+      }
+    })();
+    return { count, first };
+  }
+
+  /* ---------- Candidate helpers ---------- */
+  function computeCands(board) {
+    const c = new Array(81).fill(0);
+    for (let i = 0; i < 81; i++) if (!board[i]) { let m = ALL; for (const p of PEERS[i]) if (board[p]) m &= ~(1 << board[p]); c[i] = m; }
+    return c;
+  }
+  function place(board, cand, i, d) { board[i] = d; cand[i] = 0; const bit = 1 << d; for (const p of PEERS[i]) cand[p] &= ~bit; }
+  // empty cells in unit u that can still hold d; null if d already placed there
+  function positions(board, cand, u, d) {
+    const bit = 1 << d, p = [];
+    for (const i of UNITS[u]) { if (board[i] === d) return null; if (!board[i] && (cand[i] & bit)) p.push(i); }
+    return p;
+  }
+  function quickSingle(b, c) {
+    for (let i = 0; i < 81; i++) if (!b[i] && pop(c[i]) === 1) return [i, digs(c[i])[0]];
+    for (let u = 0; u < 27; u++) for (let d = 1; d <= 9; d++) { const p = positions(b, c, u, d); if (p && p.length === 1) return [p[0], d]; }
+    return null;
+  }
+  function combos(a, k, s = 0, cur = [], out = []) {
+    if (cur.length === k) { out.push(cur.slice()); return out; }
+    for (let i = s; i < a.length; i++) { cur.push(a[i]); combos(a, k, i + 1, cur, out); cur.pop(); }
+    return out;
+  }
+
+  /* ---------- Placement techniques (with explanations) ---------- */
+  function hiddenSingle(board, cand, from, to) {
+    for (let u = from; u < to; u++) for (let d = 1; d <= 9; d++) {
+      const p = positions(board, cand, u, d);
+      if (!p || p.length !== 1) continue;
+      const cell = p[0], blockers = new Set(); let ruled = false;
+      for (const j of UNITS[u]) {
+        if (j === cell || board[j]) continue;
+        const blk = PEERS[j].find(q => board[q] === d);
+        if (blk !== undefined) blockers.add(blk); else ruled = true;
+      }
+      return { kind: 'place', tech: 'Hidden Single', level: 1, cell, digit: d, units: [u], cells: [...blockers], digits: [d], elims: [],
+        nudge: `Focus on ${B(uName(u))}. One of its missing digits has only one cell where it can go.`,
+        text: `Every ${uType(u)} needs a ${B(d)}. Check each empty cell in ${B(uName(u))}: all but one already "see" a ${d} in their row, column or box (the highlighted ${d}s)${ruled ? `, or had ${d} ruled out in an earlier step` : ''}. The only cell left is ${B(cName(cell))}, so it must be ${B(d)}.` };
+    }
+    return null;
+  }
+  function nakedSingle(board, cand) {
+    for (let i = 0; i < 81; i++) {
+      if (board[i] || pop(cand[i]) !== 1) continue;
+      const d = digs(cand[i])[0], parts = []; let seen = 0;
+      for (const u of CU(i)) {
+        const ds = [...new Set(UNITS[u].filter(j => board[j]).map(j => board[j]))].sort((a, b) => a - b);
+        ds.forEach(x => seen |= 1 << x);
+        if (ds.length) parts.push(`${uName(u)} already has ${list(ds)}`);
+      }
+      const extra = digs(ALL & ~seen & ~(1 << d));
+      return { kind: 'place', tech: 'Naked Single', level: 1, cell: i, digit: d, units: CU(i), nudgeUnits: [18 + BI[i]], cells: [], digits: [d], elims: [],
+        nudge: `Focus on ${B(uName(18 + BI[i]))}. One of its empty cells has only one digit that fits.`,
+        text: `Look at ${B(cName(i))}. Its ${list(parts)}.${extra.length ? ` Earlier steps also ruled out ${list(extra)}.` : ''} That leaves just one possibility: ${B(d)}.` };
+    }
+    return null;
+  }
+  const findSingle = (b, c) => hiddenSingle(b, c, 18, 27) || nakedSingle(b, c) || hiddenSingle(b, c, 0, 18);
+
+  /* ---------- Elimination techniques ---------- */
+  function pointing(board, cand) {
+    for (let u = 18; u < 27; u++) for (let d = 1; d <= 9; d++) {
+      const p = positions(board, cand, u, d); if (!p || p.length < 2 || p.length > 3) continue;
+      let line = -1;
+      if (p.every(i => RI[i] === RI[p[0]])) line = RI[p[0]]; else if (p.every(i => CI[i] === CI[p[0]])) line = 9 + CI[p[0]];
+      if (line < 0) continue;
+      const bit = 1 << d, el = [];
+      for (const i of UNITS[line]) if (!board[i] && BI[i] !== u - 18 && (cand[i] & bit)) el.push({ i, d });
+      if (!el.length) continue;
+      return { kind: 'elim', tech: p.length === 2 ? 'Pointing Pair' : 'Pointing Triple', level: 2, units: [u, line], nudgeUnits: [u], cells: p, digits: [d], elims: el,
+        nudge: `Look inside ${B(uName(u))}. Where can the ${B(d)} go?`,
+        text: `In ${B(uName(u))}, the ${d} can only go in ${list(p.map(cName))}, and they all lie in ${B(uName(line))}. So the ${d} for ${uName(line)} must come from this box, which means no other cell in ${uName(line)} can be ${d}. Remove ${elimList(el)}.` };
+    }
+    return null;
+  }
+  function claiming(board, cand) {
+    for (let u = 0; u < 18; u++) for (let d = 1; d <= 9; d++) {
+      const p = positions(board, cand, u, d); if (!p || p.length < 2 || p.length > 3) continue;
+      const bx = BI[p[0]]; if (!p.every(i => BI[i] === bx)) continue;
+      const bit = 1 << d, el = [];
+      for (const i of UNITS[18 + bx]) if (!board[i] && !UNITS[u].includes(i) && (cand[i] & bit)) el.push({ i, d });
+      if (!el.length) continue;
+      return { kind: 'elim', tech: 'Box/Line Reduction', level: 2, units: [u, 18 + bx], nudgeUnits: [u], cells: p, digits: [d], elims: el,
+        nudge: `Look along ${B(uName(u))}. Where can the ${B(d)} go?`,
+        text: `In ${B(uName(u))}, the ${d} can only go in ${list(p.map(cName))}, all inside ${B(uName(18 + bx))}. So the box's ${d} has to sit in this ${uType(u)}, and the other cells of ${uName(18 + bx)} can't be ${d}. Remove ${elimList(el)}.` };
+    }
+    return null;
+  }
+  function nakedSubset(board, cand, k) {
+    for (let u = 0; u < 27; u++) {
+      const pool = UNITS[u].filter(i => !board[i] && pop(cand[i]) >= 2 && pop(cand[i]) <= k);
+      if (pool.length < k) continue;
+      for (const cb of combos(pool, k)) {
+        const uni = cb.reduce((m, i) => m | cand[i], 0); if (pop(uni) !== k) continue;
+        const el = [];
+        for (const i of UNITS[u]) if (!board[i] && !cb.includes(i)) for (const d of digs(cand[i] & uni)) el.push({ i, d });
+        if (!el.length) continue;
+        const ds = digs(uni), name = k === 2 ? 'Naked Pair' : 'Naked Triple';
+        return { kind: 'elim', tech: name, level: 2, units: [u], cells: cb, digits: ds, elims: el,
+          nudge: `Look at ${B(uName(u))}. Find ${k} cells that share the same ${k} candidates.`,
+          text: `In ${B(uName(u))}, the cells ${list(cb.map(cName))} can only contain ${list(ds)}. That's ${k} cells for ${k} digits, so those digits are locked into these cells and no other cell in ${uName(u)} can have them. Remove ${elimList(el)}.` };
+      }
+    }
+    return null;
+  }
+  function hiddenPair(board, cand) {
+    for (let u = 0; u < 27; u++) for (let a = 1; a <= 8; a++) {
+      const pa = positions(board, cand, u, a); if (!pa || pa.length !== 2) continue;
+      for (let b = a + 1; b <= 9; b++) {
+        const pb = positions(board, cand, u, b); if (!pb || pb.length !== 2 || pa[0] !== pb[0] || pa[1] !== pb[1]) continue;
+        const mask = (1 << a) | (1 << b), el = [];
+        for (const i of pa) for (const d of digs(cand[i] & ~mask)) el.push({ i, d });
+        if (!el.length) continue;
+        return { kind: 'elim', tech: 'Hidden Pair', level: 2, units: [u], cells: pa, digits: [a, b], elims: el,
+          nudge: `Look at ${B(uName(u))}. Two of its missing digits can only go in the same two cells.`,
+          text: `In ${B(uName(u))}, the digits ${a} and ${b} can only go in ${cName(pa[0])} and ${cName(pa[1])}. Those two cells must hold ${a} and ${b} between them, so their other candidates can go. Remove ${elimList(el)}.` };
+      }
+    }
+    return null;
+  }
+  function xWing(board, cand) {
+    for (let d = 1; d <= 9; d++) {
+      const bit = 1 << d;
+      for (const base of [0, 9]) {
+        const cross = base === 0 ? 9 : 0, L = [];
+        for (let l = 0; l < 9; l++) { const p = positions(board, cand, base + l, d); if (p && p.length === 2) L.push({ u: base + l, p, x: p.map(i => base === 0 ? CI[i] : RI[i]) }); }
+        for (let a = 0; a < L.length; a++) for (let b = a + 1; b < L.length; b++) {
+          const A = L[a], Q = L[b];
+          if (A.x[0] !== Q.x[0] || A.x[1] !== Q.x[1]) continue;
+          const corners = [...A.p, ...Q.p], el = [];
+          for (const x of A.x) for (const i of UNITS[cross + x]) if (!board[i] && !corners.includes(i) && (cand[i] & bit)) el.push({ i, d });
+          if (!el.length) continue;
+          const lines = base === 0 ? 'rows' : 'columns', crossN = base === 0 ? 'columns' : 'rows';
+          return { kind: 'elim', tech: 'X-Wing', level: 3, units: [A.u, Q.u, cross + A.x[0], cross + A.x[1]], nudgeUnits: [A.u, Q.u], cells: corners, digits: [d], elims: el,
+            nudge: `Compare ${B(uName(A.u))} and ${B(uName(Q.u))}. Where can the ${B(d)} go in each?`,
+            text: `In both ${B(uName(A.u))} and ${B(uName(Q.u))}, the ${d} can only go in ${crossN} ${A.x[0] + 1} and ${A.x[1] + 1}. These four corners form an X-Wing: the two ${d}s must sit on opposite corners, so those ${crossN} get their ${d} from these ${lines}. Remove ${d} from the rest of the two ${crossN}: ${elimList(el)}.` };
+        }
+      }
+    }
+    return null;
+  }
+  function yWing(board, cand) {
+    const bv = []; for (let i = 0; i < 81; i++) if (!board[i] && pop(cand[i]) === 2) bv.push(i);
+    for (const pv of bv) {
+      const [x, y] = digs(cand[pv]);
+      for (const [p, q] of [[x, y], [y, x]]) for (const a of bv) {
+        if (!sees(pv, a)) continue;
+        const ma = cand[a]; if (!(ma & (1 << p)) || (ma & (1 << q))) continue;
+        const z = digs(ma & ~(1 << p))[0], need = (1 << q) | (1 << z);
+        for (const b of bv) {
+          if (b === a || !sees(pv, b) || cand[b] !== need) continue;
+          const el = [];
+          for (let i = 0; i < 81; i++) if (!board[i] && i !== pv && i !== a && i !== b && sees(i, a) && sees(i, b) && (cand[i] & (1 << z))) el.push({ i, d: z });
+          if (!el.length) continue;
+          return { kind: 'elim', tech: 'Y-Wing', level: 3, units: [], cells: [pv, a, b], nudgeCells: [pv, a, b], digits: [p, q, z], elims: el,
+            nudge: `Study the three highlighted cells. Each has exactly two candidates, and they're linked.`,
+            text: `${B(cName(pv))} is either ${p} or ${q}. If it's ${p}, then ${cName(a)} (${p} or ${z}) must be ${z}. If it's ${q}, then ${cName(b)} (${q} or ${z}) must be ${z}. Either way one of those two cells is ${B(z)}, so any cell that sees both of them can't be ${z}. Remove ${elimList(el)}.` };
+        }
+      }
+    }
+    return null;
+  }
+  const findElim = (b, c) => pointing(b, c) || claiming(b, c) || nakedSubset(b, c, 2) || hiddenPair(b, c) || nakedSubset(b, c, 3) || xWing(b, c) || yWing(b, c);
+
+  /* ---------- "What if" forcing ---------- */
+  function contradiction(board, cand, i, d) {
+    const b = board.slice(), c = cand.slice(); place(b, c, i, d);
+    for (let n = 0; n < 81; n++) {
+      for (let j = 0; j < 81; j++) if (!b[j] && !c[j]) return `${cName(j)} would be left with no possible digit`;
+      for (let u = 0; u < 27; u++) for (let e = 1; e <= 9; e++) { const p = positions(b, c, u, e); if (p && !p.length) return `${uName(u)} would have nowhere left for a ${e}`; }
+      const q = quickSingle(b, c); if (!q) return null; place(b, c, q[0], q[1]);
+    }
+    return null;
+  }
+  function findForcing(board, cand) {
+    const bv = []; for (let i = 0; i < 81; i++) if (!board[i] && pop(cand[i]) === 2) bv.push(i);
+    for (const i of bv) {
+      const [a, b] = digs(cand[i]);
+      for (const [bad, good] of [[a, b], [b, a]]) {
+        const why = contradiction(board, cand, i, bad);
+        if (why) return { kind: 'place', tech: 'Forcing (What If)', level: 4, cell: i, digit: good, units: [], cells: [], nudgeCells: [i], digits: [good], elims: [],
+          nudge: `No simple pattern here, so try a "what if" test on ${B(cName(i))}, which has only two candidates.`,
+          text: `${B(cName(i))} can only be ${bad} or ${good}. Suppose it were ${bad}. Filling in the singles that follow, ${why}. That's impossible, so ${cName(i)} must be ${B(good)}.` };
+      }
+    }
+    return null;
+  }
+
+  /* ---------- Grading & generation ---------- */
+  function grade(puz) {
+    const b = puz.slice(), c = computeCands(b); let lvl = 1;
+    for (let k = 0; k < 500; k++) {
+      const q = quickSingle(b, c); if (q) { place(b, c, q[0], q[1]); continue; }
+      const e = findElim(b, c); if (e) { lvl = Math.max(lvl, e.level); for (const { i, d } of e.elims) c[i] &= ~(1 << d); continue; }
+      break;
+    }
+    return b.includes(0) ? 4 : lvl;
+  }
+  function makeAttempt(target) {
+    const sol = search(new Array(81).fill(0), 1, true).first, puz = sol.slice(); let clues = 81;
+    for (const i of shuffle([...Array(41).keys()])) {
+      if (clues <= target) break;
+      const j = 80 - i, si = puz[i], sj = puz[j];
+      puz[i] = 0; puz[j] = 0;
+      if (search(puz, 2, false).count !== 1) { puz[i] = si; puz[j] = sj; } else clues -= (i === j ? 1 : 2);
+    }
+    return { puzzle: puz, solution: sol, clues };
+  }
+  const CFG = { easy: { clues: 38, want: 1 }, medium: { clues: 30, want: 2 }, hard: { clues: 24, want: 3, ok: 4 } };
+  function generate(level, done, budget = 3500) {
+    const cfg = CFG[level], t0 = Date.now(); let best = null, bestScore = -99;
+    (function step() {
+      for (let k = 0; k < 3; k++) {
+        const a = makeAttempt(cfg.clues); a.grade = grade(a.puzzle);
+        const sc = a.grade === cfg.want ? 10 : a.grade === cfg.ok ? 5 : -Math.abs(a.grade - cfg.want);
+        if (sc > bestScore) { best = a; bestScore = sc; }
+        if (sc === 10) return done(best);
+      }
+      if (Date.now() - t0 > budget) return done(best);
+      setTimeout(step, 0);
+    })();
+  }
+
+  /* ---------- Hint builder ---------- */
+  function buildHint(board, solution, given) {
+    const wrong = [];
+    for (let i = 0; i < 81; i++) if (!given[i] && board[i] && board[i] !== solution[i]) wrong.push(i);
+    if (wrong.length) return [{ kind: 'mistake', tech: 'Check your work', level: 0, units: [], cells: wrong, digits: [], elims: [], nudge: '',
+      text: wrong.length === 1
+        ? `The ${B(board[wrong[0]])} in ${B(cName(wrong[0]))} doesn't fit with the rest of the puzzle. It may look fine now, but it will cause a clash later. Clear it, then ask me again.`
+        : `These cells hold digits that don't fit the solution: ${B(list(wrong.map(cName)))}. Clear them, then ask me again.` }];
+    if (!board.includes(0)) return [];
+    const b = board.slice(), c = computeCands(b), steps = [];
+    for (let k = 0; k < 40; k++) {
+      const s = findSingle(b, c); if (s) { s.snap = c.slice(); steps.push(s); return steps; }
+      const e = findElim(b, c); if (e) { e.snap = c.slice(); steps.push(e); for (const { i, d } of e.elims) c[i] &= ~(1 << d); continue; }
+      const f = findForcing(b, c); if (f) { f.snap = c.slice(); steps.push(f); return steps; }
+      break;
+    }
+    let best = -1, bn = 10;
+    for (let i = 0; i < 81; i++) if (!b[i]) { const n = pop(c[i]); if (n < bn) { bn = n; best = i; } }
+    steps.push({ kind: 'place', tech: 'Reveal', level: 5, cell: best, digit: solution[best], units: [], cells: [], nudgeCells: [best], digits: [solution[best]], elims: [], snap: c.slice(),
+      nudge: `This spot needs a very long chain of reasoning. Let's reveal one cell to get you moving.`,
+      text: `The next deduction is beyond my step-by-step toolkit, so here's a free cell: ${B(cName(best))} is ${B(solution[best])}. Fill it in and the simpler logic should open up again.` });
+    return steps;
+  }
+
+  return { RI, CI, BI, UNITS, PEERS, CU, sees, pop, computeCands, buildHint, generate, grade, search };
+})();
+</script>
+
+<!-- ============ UI ============ -->
+<script>
+(() => {
+'use strict';
+const E = Engine, { RI, CI, UNITS, PEERS } = E;
+const $ = s => document.querySelector(s);
+const LV = { easy: 'Easy', medium: 'Intermediate', hard: 'Difficult' };
+const LEARN = {
+  'Hidden Single': 'A digit that has only one possible cell left in a row, column or box.',
+  'Naked Single': 'A cell where only one digit is still possible.',
+  'Pointing Pair': 'If a digit inside a box is confined to one row or column, remove it from the rest of that line.',
+  'Pointing Triple': 'Same as a pointing pair, but with three cells in a line inside the box.',
+  'Box/Line Reduction': 'If a digit in a row or column is confined to one box, remove it from the rest of that box.',
+  'Naked Pair': 'Two cells in a unit with the same two candidates. Those digits are locked in, so remove them elsewhere in the unit.',
+  'Naked Triple': 'Three cells in a unit that share only three candidates between them. Remove those digits elsewhere.',
+  'Hidden Pair': 'Two digits that can only go in the same two cells of a unit. Clear the other candidates from those cells.',
+  'X-Wing': 'A digit confined to the same two columns in two rows (or the same two rows in two columns) forms a rectangle that clears those lines.',
+  'Y-Wing': 'Three two-candidate cells in a hinge. Any cell that sees both "wings" can\'t hold their shared digit.',
+  'Forcing (What If)': 'Try one of two candidates. If it leads to a contradiction, the other one must be right.'
+};
+const KEY = 'sudoku-coach-v1';
+let S = null, sel = -1, notesMode = false, undoStack = [], hint = null, popCell = -1;
+const settings = { showMistakes: true, sameHL: true };
+
+/* ---------- persistence ---------- */
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ S, settings })); } catch (e) {} }
+function load() {
+  try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o) { if (o.settings) Object.assign(settings, o.settings); if (o.S && o.S.board) S = o.S; } } catch (e) {}
+}
+
+/* ---------- build board & pad ---------- */
+const boardEl = $('#board'), cells = [];
+const baseCls = i => 'cell' + (CI[i] % 3 === 2 && CI[i] < 8 ? ' br' : '') + (RI[i] % 3 === 2 && RI[i] < 8 ? ' bb' : '');
+for (let i = 0; i < 81; i++) {
+  const el = document.createElement('div'); el.className = baseCls(i); el.dataset.i = i; el.setAttribute('role', 'gridcell');
+  el.setAttribute('aria-label', `Row ${RI[i] + 1} column ${CI[i] + 1}`);
+  const v = document.createElement('span'); v.className = 'v';
+  const n = document.createElement('div'); n.className = 'n'; const ns = [];
+  for (let d = 1; d <= 9; d++) { const s = document.createElement('span'); n.appendChild(s); ns.push(s); }
+  el.append(v, n); boardEl.appendChild(el); cells.push({ el, v, n, ns, cls: '' });
+}
+boardEl.addEventListener('click', e => { const c = e.target.closest('.cell'); if (!c || !S || S.done) return; sel = +c.dataset.i; render(); });
+const padEl = $('#pad'), padBtns = [];
+for (let d = 1; d <= 9; d++) {
+  const b = document.createElement('button'); b.innerHTML = `${d}<small></small>`; b.setAttribute('aria-label', `Number ${d}`);
+  b.addEventListener('click', () => input(d)); padEl.appendChild(b); padBtns.push(b);
+}
+$('#glossary').innerHTML = Object.entries(LEARN).filter(([k]) => k !== 'Pointing Triple').map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+
+/* ---------- render ---------- */
+function render() {
+  if (!S) return;
+  const b = S.board, h = hint ? hint.steps[hint.idx] : null, st = hint ? hint.stage : 0, sv = sel >= 0 ? b[sel] : 0;
+  const hu = new Set(), hp = new Set(), hb = new Set(), showC = new Set(), elim = {}; let ht = -1, key = 0;
+  if (h) {
+    if (h.kind === 'mistake') h.cells.forEach(i => hb.add(i));
+    else if (st === 0) {
+      (h.nudgeUnits || h.units).forEach(u => UNITS[u].forEach(i => hu.add(i)));
+      (h.nudgeCells || []).forEach(i => { hp.add(i); showC.add(i); });
+    } else {
+      h.units.forEach(u => UNITS[u].forEach(i => hu.add(i)));
+      h.cells.forEach(i => hp.add(i));
+      if (h.kind === 'place') { ht = h.cell; showC.add(h.cell); }
+      h.elims.forEach(({ i, d }) => { elim[i] = (elim[i] || 0) | (1 << d); showC.add(i); });
+      if (h.kind === 'elim') { hu.forEach(i => showC.add(i)); h.cells.forEach(i => showC.add(i)); }
+      key = h.digits.reduce((m, d) => m | (1 << d), 0);
+    }
+  }
+  for (let i = 0; i < 81; i++) {
+    const c = cells[i], v = b[i];
+    let cls = baseCls(i) + (S.given[i] ? ' given' : '');
+    if (!h && sel >= 0) {
+      if (i !== sel && E.sees(i, sel)) cls += ' peer';
+      if (settings.sameHL && sv && v === sv && i !== sel) cls += ' same';
+    }
+    if (i === sel) cls += ' sel';
+    if (v && !S.given[i] && ((settings.showMistakes && v !== S.solution[i]) || PEERS[i].some(p => b[p] === v))) cls += ' err';
+    if (hu.has(i)) cls += ' hu'; if (hp.has(i)) cls += ' hp'; if (i === ht) cls += ' ht'; if (hb.has(i)) cls += ' hb';
+    if (i === popCell) cls += ' pop';
+    if (c.cls !== cls) { c.el.className = cls; c.cls = cls; }
+    const vt = v ? String(v) : ''; if (c.v.textContent !== vt) c.v.textContent = vt;
+    let mask = 0, fromHint = false;
+    if (!v) { if (h && h.snap && showC.has(i)) { mask = h.snap[i]; fromHint = true; } else mask = S.notes[i]; }
+    for (let d = 1; d <= 9; d++) {
+      const s = c.ns[d - 1], on = mask & (1 << d), t = on ? String(d) : '';
+      if (s.textContent !== t) s.textContent = t;
+      let sc = '';
+      if (on && fromHint) sc = (elim[i] & (1 << d)) ? 'x' : (key & (1 << d)) ? 'k' : '';
+      else if (on && !h && settings.sameHL && sv === d) sc = 'm';
+      if (s.className !== sc) s.className = sc;
+    }
+  }
+  popCell = -1;
+  const cnt = Array(10).fill(0); b.forEach(v => cnt[v]++);
+  padBtns.forEach((btn, k) => { const d = k + 1, left = 9 - cnt[d]; btn.classList.toggle('done', left <= 0); btn.querySelector('small').textContent = left > 0 ? left : ''; });
+  $('#t-notes').classList.toggle('on', notesMode);
+  document.body.classList.toggle('notes-mode', notesMode);
+  $('#mistakes').textContent = S.mistakes;
+  renderCoach();
+}
+
+function idleTip() {
+  const empty = S.board.filter(v => !v).length;
+  if (S.done) return 'Puzzle complete. Nicely done!';
+  if (empty > 45) return 'Start with a nearly full box, row or column. Which digits are missing, and where can each one go? Tap <b>Hint</b> whenever you want a nudge.';
+  if (empty > 20) return 'Scan one digit at a time across the grid, e.g. "where can the 5 go in each box?" Tap <b>Hint</b> if you get stuck.';
+  return 'Almost there! If it gets tricky, use <b>Candidates</b> to pencil in options, or tap <b>Hint</b>.';
+}
+function renderCoach() {
+  const box = $('#coach');
+  if (!hint) {
+    box.className = 'coach';
+    box.innerHTML = `<div class="idle"><svg viewBox="0 0 24 24" class="i"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><div><b>Your coach</b><p>${idleTip()}</p></div></div>`;
+    return;
+  }
+  const h = hint.steps[hint.idx], n = hint.steps.length, last = hint.idx === n - 1;
+  let body = '', acts = '';
+  if (hint.stage === 0) {
+    body = `<p>${h.nudge}</p>${LEARN[h.tech] ? `<p class="learn"><b>${h.tech}:</b> ${LEARN[h.tech]}</p>` : ''}`;
+    acts = `<button class="btn pri" data-c="explain">Show me why</button>`;
+  } else {
+    body = `<p>${h.text}</p>`;
+    if (h.kind === 'elim') body += `<div class="legend"><span><i style="background:var(--pattern)"></i>Key cells</span><span><b style="color:var(--good)">${h.digits.join(' ')}</b> key digits</span><span><b style="color:var(--bad);text-decoration:line-through">x</b> removed</span></div>`;
+    if (h.kind === 'mistake') acts = `<button class="btn pri" data-c="clear">Clear ${h.cells.length > 1 ? 'them' : 'it'}</button><button class="btn" data-c="close">Leave it</button>`;
+    else if (!last) { body += `<p class="learn">This clears the way for the next step.</p>`; acts = `<button class="btn pri" data-c="next">Next step →</button>`; }
+    else if (h.kind === 'place') acts = `<button class="btn pri" data-c="fill">Fill in ${h.digit}</button><button class="btn" data-c="close">I'll do it</button>`;
+    else acts = `<button class="btn pri" data-c="close">Got it</button>`;
+  }
+  box.className = 'coach active';
+  box.innerHTML = `<div class="coach-head"><span class="tag lv${h.level}">${h.tech}</span>${n > 1 ? `<span class="stepn">Step ${hint.idx + 1} of ${n}</span>` : ''}<button class="x" data-c="close" aria-label="Close hint">×</button></div>${body}<div class="acts">${acts}</div>`;
+}
+
+/* ---------- actions ---------- */
+function pushUndo() { undoStack.push({ b: S.board.slice(), n: S.notes.slice() }); if (undoStack.length > 300) undoStack.shift(); }
+function setValue(i, d, byUser) {
+  S.board[i] = d; S.notes[i] = 0; popCell = i;
+  const bit = 1 << d; for (const p of PEERS[i]) S.notes[p] &= ~bit;
+  if (byUser && settings.showMistakes && d !== S.solution[i]) { S.mistakes++; try { navigator.vibrate && navigator.vibrate(60); } catch (e) {} }
+}
+function afterChange() { checkWin(); save(); render(); }
+function input(d) {
+  if (!S || S.done) return;
+  if (sel < 0) { toast('Tap a cell first'); return; }
+  if (S.given[sel]) { toast('That cell is a starting clue'); return; }
+  if (notesMode) { if (S.board[sel]) return; pushUndo(); S.notes[sel] ^= 1 << d; save(); render(); return; }
+  pushUndo();
+  if (hint) { const h = hint.steps[hint.idx]; if (h.kind === 'place' && h.cell === sel && h.digit === d) toast('Exactly right!'); hint = null; }
+  if (S.board[sel] === d) S.board[sel] = 0; else setValue(sel, d, true);
+  afterChange();
+}
+function erase() {
+  if (!S || S.done || sel < 0 || S.given[sel]) return;
+  if (!S.board[sel] && !S.notes[sel]) return;
+  pushUndo(); S.board[sel] = 0; S.notes[sel] = 0; hint = null; afterChange();
+}
+function undo() { if (!S || S.done) return; const u = undoStack.pop(); if (!u) { toast('Nothing to undo'); return; } S.board = u.b; S.notes = u.n; hint = null; afterChange(); }
+function fillCandidates() {
+  if (!S || S.done) return; pushUndo();
+  const c = E.computeCands(S.board); for (let i = 0; i < 81; i++) if (!S.board[i]) S.notes[i] = c[i];
+  toast('Candidates pencilled in'); save(); render();
+}
+function startHint() {
+  if (!S || S.done) return;
+  if (hint) { if (hint.stage === 0) { hint.stage = 1; render(); } return; }
+  const steps = E.buildHint(S.board, S.solution, S.given); if (!steps.length) return;
+  S.hints++; hint = { steps, idx: 0, stage: steps[0].kind === 'mistake' ? 1 : 0 };
+  save(); render();
+  if (window.innerHeight < 900) $('#coach').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+$('#coach').addEventListener('click', e => {
+  const a = e.target.closest('[data-c]'); if (!a || !hint) return;
+  const h = hint.steps[hint.idx];
+  switch (a.dataset.c) {
+    case 'explain': hint.stage = 1; break;
+    case 'next': h.elims.forEach(({ i, d }) => { S.notes[i] &= ~(1 << d); }); hint.idx++; hint.stage = 0; break;
+    case 'fill': pushUndo(); setValue(h.cell, h.digit, false); sel = h.cell; hint = null; afterChange(); return;
+    case 'clear': pushUndo(); h.cells.forEach(i => { S.board[i] = 0; }); sel = h.cells[0]; hint = null; afterChange(); return;
+    case 'close': hint = null; break;
+  }
+  render();
+});
+document.querySelector('.tools').addEventListener('click', e => {
+  const t = e.target.closest('[data-t]'); if (!t) return;
+  ({ undo, erase, fill: fillCandidates, hint: startHint, notes: () => { notesMode = !notesMode; render(); } })[t.dataset.t]();
+});
+
+/* ---------- win ---------- */
+const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+function checkWin() {
+  if (S.done) return;
+  for (let i = 0; i < 81; i++) if (S.board[i] !== S.solution[i]) return;
+  S.done = true; hint = null; sel = -1;
+  $('#win-msg').textContent = `You completed ${S.level === 'hard' ? 'a' : 'an'} ${LV[S.level]} puzzle.`;
+  $('#win-stats').innerHTML = `<div><b>${fmt(S.time)}</b><span>Time</span></div><div><b>${S.hints}</b><span>Hints</span></div><div><b>${S.mistakes}</b><span>Mistakes</span></div>`;
+  setTimeout(() => openM('#m-win'), 350);
+}
+
+/* ---------- screens, modals, toast ---------- */
+function screen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); }
+function openM(id) { $(id).classList.add('on'); }
+function closeM(id) { $(id).classList.remove('on'); }
+let toastT; function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1600); }
+document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openM(b.dataset.open)));
+document.querySelectorAll('.ov').forEach(o => o.addEventListener('click', e => { if (o.id !== 'm-loading' && (e.target === o || e.target.closest('[data-close]'))) o.classList.remove('on'); }));
+
+function showHome() {
+  screen('home'); hint = null;
+  const c = $('#continue');
+  if (S && !S.done) { c.hidden = false; c.innerHTML = `Continue ${LV[S.level]} game <span>${fmt(S.time)}</span>`; } else c.hidden = true;
+}
+function newGame(level) {
+  $('#loading-text').textContent = `Building a${level === 'easy' || level === 'medium' ? 'n' : ''} ${LV[level]} puzzle…`;
+  openM('#m-loading');
+  setTimeout(() => E.generate(level, g => {
+    S = { level, puzzle: g.puzzle, solution: g.solution, board: g.puzzle.slice(), given: g.puzzle.map(v => v > 0), notes: Array(81).fill(0), time: 0, mistakes: 0, hints: 0, done: false };
+    sel = -1; hint = null; undoStack = []; notesMode = false;
+    closeM('#m-loading'); startGame();
+  }), 60);
+}
+function startGame() { screen('game'); $('#lvl-badge').textContent = LV[S.level]; $('#timer').textContent = fmt(S.time); render(); save(); }
+document.querySelectorAll('.lvl').forEach(b => b.addEventListener('click', () => newGame(b.dataset.level)));
+$('#continue').addEventListener('click', () => { undoStack = []; startGame(); });
+$('#b-home').addEventListener('click', showHome);
+$('#w-again').addEventListener('click', () => { closeM('#m-win'); newGame(S.level); });
+$('#w-menu').addEventListener('click', () => { closeM('#m-win'); showHome(); });
+
+/* ---------- settings ---------- */
+const sm = $('#s-mistakes'), ss = $('#s-same');
+sm.addEventListener('change', () => { settings.showMistakes = sm.checked; save(); render(); });
+ss.addEventListener('change', () => { settings.sameHL = ss.checked; save(); render(); });
+
+/* ---------- timer ---------- */
+setInterval(() => {
+  if (S && !S.done && $('#game').classList.contains('on') && !document.hidden && !$('#m-help').classList.contains('on')) {
+    S.time++; $('#timer').textContent = fmt(S.time); if (S.time % 5 === 0) save();
+  }
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+
+/* ---------- keyboard ---------- */
+document.addEventListener('keydown', e => {
+  const open = document.querySelector('.ov.on');
+  if (open) { if (e.key === 'Escape' && open.id !== 'm-loading') open.classList.remove('on'); return; }
+  if (!$('#game').classList.contains('on') || !S) return;
+  const k = e.key;
+  if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (/^[1-9]$/.test(k)) { input(+k); return; }
+  const mv = { ArrowUp: -9, ArrowDown: 9, ArrowLeft: -1, ArrowRight: 1 }[k];
+  if (mv) {
+    e.preventDefault();
+    if (sel < 0) sel = 40;
+    else if (mv === 1 && CI[sel] === 8) sel -= 8; else if (mv === -1 && CI[sel] === 0) sel += 8;
+    else sel = (sel + mv + 81) % 81;
+    render(); return;
+  }
+  if (k === 'Backspace' || k === 'Delete' || k === '0') { erase(); return; }
+  if (k === 'n' || k === 'N') { notesMode = !notesMode; render(); return; }
+  if (k === 'h' || k === 'H') { startHint(); return; }
+  if (k === 'Escape') { hint = null; render(); }
+});
+
+/* ---------- install (PWA) ---------- */
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; $('#install').hidden = false; });
+$('#install').addEventListener('click', async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); try { await deferredPrompt.userChoice; } catch (e) {} deferredPrompt = null; $('#install').hidden = true; });
+try { if ('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+
+/* ---------- boot ---------- */
+load();
+sm.checked = settings.showMistakes; ss.checked = settings.sameHL;
+showHome();
+})();
+</script>
+</body>
+</html>

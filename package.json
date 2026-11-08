@@ -1,0 +1,11 @@
+{
+  "name": "sudoku-coach",
+  "version": "1.0.0",
+  "description": "Responsive, installable Sudoku PWA with a step-by-step solving coach and three difficulty levels.",
+  "private": true,
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node tests/engine.test.js"
+  },
+  "engines": { "node": ">=18" }
+}
