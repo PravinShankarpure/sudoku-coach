@@ -122,6 +122,8 @@ h1{font-size:clamp(28px,7vw,38px);letter-spacing:-.02em;margin:14px 0 6px}
 .stepn{font-size:13px;color:var(--muted)}
 .coach .x{margin-left:auto;width:32px;height:32px;border-radius:10px;font-size:22px;line-height:1;color:var(--muted)}
 .coach .x:hover{background:var(--peer)}
+.coach ol,.coach ul{margin:0 0 10px;padding-left:22px}
+.coach li{margin:4px 0}
 .learn{font-size:13.5px;color:var(--muted);border-left:3px solid var(--accent-soft);padding-left:10px}
 .acts{display:flex;gap:8px;flex-wrap:wrap}
 .btn{padding:10px 16px;border-radius:12px;font-weight:700;background:var(--peer);font-size:15px}
@@ -307,15 +309,25 @@ const Engine = (() => {
   const pop = m => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
   const digs = m => { const a = []; for (let d = 1; d <= 9; d++) if (m & (1 << d)) a.push(d); return a; };
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  /* ---------- wording helpers ---------- */
   const uName = u => u < 9 ? `row ${u + 1}` : u < 18 ? `column ${u - 8}` : `box ${u - 17}`;
   const uType = u => u < 9 ? 'row' : u < 18 ? 'column' : 'box';
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const cName = i => `R${RI[i] + 1}C${CI[i] + 1}`;
-  const list = a => a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  const list = (a, word = 'and') => a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ` ${word} ` + a[a.length - 1];
   const B = s => `<b>${s}</b>`;
+  const P = s => `<p>${s}</p>`;
+  const OL = items => `<ol>${items.map(x => `<li>${x}</li>`).join('')}</ol>`;
+  const cells = a => list(a.map(i => B(cName(i))));
+  const cellsOr = a => list(a.map(i => B(cName(i))), 'or');
+  const shared = (a, b) => RI[a] === RI[b] ? 'row' : CI[a] === CI[b] ? 'column' : 'box';
   const elimList = el => {
     const by = {}; el.forEach(({ i, d }) => (by[d] = by[d] || []).push(cName(i)));
     return Object.keys(by).map(d => `${B(d)} from ${list(by[d])}`).join('; ');
   };
+  const crossOut = el => P(`<b>So:</b> cross out ${elimList(el)}.`);
+  const emit = (out, step) => { if (!out) return step; out.push(step); return null; };
 
   /* ---------- Backtracking solver (counting / random fill) ---------- */
   function search(grid, limit, random) {
@@ -352,15 +364,19 @@ const Engine = (() => {
     return c;
   }
   function place(board, cand, i, d) { board[i] = d; cand[i] = 0; const bit = 1 << d; for (const p of PEERS[i]) cand[p] &= ~bit; }
-  // empty cells in unit u that can still hold d; null if d already placed there
+  // empty cells in unit u that can still hold d; null if d is already placed there
   function positions(board, cand, u, d) {
     const bit = 1 << d, p = [];
     for (const i of UNITS[u]) { if (board[i] === d) return null; if (!board[i] && (cand[i] & bit)) p.push(i); }
     return p;
   }
+  // fast single finder: [cell, digit, reasonText]
   function quickSingle(b, c) {
-    for (let i = 0; i < 81; i++) if (!b[i] && pop(c[i]) === 1) return [i, digs(c[i])[0]];
-    for (let u = 0; u < 27; u++) for (let d = 1; d <= 9; d++) { const p = positions(b, c, u, d); if (p && p.length === 1) return [p[0], d]; }
+    for (let i = 0; i < 81; i++) if (!b[i] && pop(c[i]) === 1) return [i, digs(c[i])[0], 'that is the only digit this cell has left'];
+    for (let u = 0; u < 27; u++) for (let d = 1; d <= 9; d++) {
+      const p = positions(b, c, u, d);
+      if (p && p.length === 1) return [p[0], d, `it is the only place left for a ${d} in ${uName(u)}`];
+    }
     return null;
   }
   function combos(a, k, s = 0, cur = [], out = []) {
@@ -369,7 +385,7 @@ const Engine = (() => {
     return out;
   }
 
-  /* ---------- Placement techniques (with explanations) ---------- */
+  /* ---------- Placement techniques ---------- */
   function hiddenSingle(board, cand, from, to) {
     for (let u = from; u < to; u++) for (let d = 1; d <= 9; d++) {
       const p = positions(board, cand, u, d);
@@ -380,32 +396,39 @@ const Engine = (() => {
         const blk = PEERS[j].find(q => board[q] === d);
         if (blk !== undefined) blockers.add(blk); else ruled = true;
       }
+      const lines = uType(u) === 'box' ? 'row or column' : uType(u) === 'row' ? 'column or box' : 'row or box';
       return { kind: 'place', tech: 'Hidden Single', level: 1, cell, digit: d, units: [u], cells: [...blockers], digits: [d], elims: [],
-        nudge: `Focus on ${B(uName(u))}. One of its missing digits has only one cell where it can go.`,
-        text: `Every ${uType(u)} needs a ${B(d)}. Check each empty cell in ${B(uName(u))}: all but one already "see" a ${d} in their row, column or box (the highlighted ${d}s)${ruled ? `, or had ${d} ruled out in an earlier step` : ''}. The only cell left is ${B(cName(cell))}, so it must be ${B(d)}.` };
+        nudge: `Look at ${B(uName(u))}. One of the digits it's still missing has only one cell where it can fit.`,
+        text: P(`Let's find a home for the ${B(d)} in ${B(uName(u))}.`) + OL([
+          `${cap(uName(u))} doesn't have a ${d} yet, and it needs exactly one.`,
+          `Check its empty cells one by one. Every one of them except one is blocked: it shares a ${lines} with a ${d} that's already on the board (the highlighted ${d}s)${ruled ? `, or the ${d} was crossed out there in an earlier step` : ''}.`,
+          `That leaves only one free spot: ${B(cName(cell))}.`
+        ]) + P(`<b>So:</b> ${B(cName(cell))} = ${B(d)}.`) };
     }
     return null;
   }
   function nakedSingle(board, cand) {
     for (let i = 0; i < 81; i++) {
       if (board[i] || pop(cand[i]) !== 1) continue;
-      const d = digs(cand[i])[0], parts = []; let seen = 0;
+      const d = digs(cand[i])[0], lines = []; let seen = 0;
       for (const u of CU(i)) {
         const ds = [...new Set(UNITS[u].filter(j => board[j]).map(j => board[j]))].sort((a, b) => a - b);
         ds.forEach(x => seen |= 1 << x);
-        if (ds.length) parts.push(`${uName(u)} already has ${list(ds)}`);
+        if (ds.length) lines.push(`${cap(uName(u))} already uses ${list(ds)}.`);
       }
       const extra = digs(ALL & ~seen & ~(1 << d));
+      if (extra.length) lines.push(`Earlier steps crossed out ${list(extra)}.`);
       return { kind: 'place', tech: 'Naked Single', level: 1, cell: i, digit: d, units: CU(i), nudgeUnits: [18 + BI[i]], cells: [], digits: [d], elims: [],
-        nudge: `Focus on ${B(uName(18 + BI[i]))}. One of its empty cells has only one digit that fits.`,
-        text: `Look at ${B(cName(i))}. Its ${list(parts)}.${extra.length ? ` Earlier steps also ruled out ${list(extra)}.` : ''} That leaves just one possibility: ${B(d)}.` };
+        nudge: `Look at ${B(uName(18 + BI[i]))}. One of its empty cells has only one digit that can fit.`,
+        text: P(`Ask ${B(cName(i))}: "which digits from 1 to 9 am I still allowed?"`) + OL(lines) +
+          P(`Every digit except ${B(d)} is taken. <b>So:</b> ${B(cName(i))} = ${B(d)}.`) };
     }
     return null;
   }
   const findSingle = (b, c) => hiddenSingle(b, c, 18, 27) || nakedSingle(b, c) || hiddenSingle(b, c, 0, 18);
 
-  /* ---------- Elimination techniques ---------- */
-  function pointing(board, cand) {
+  /* ---------- Elimination techniques (out = collect all matches) ---------- */
+  function pointing(board, cand, out) {
     for (let u = 18; u < 27; u++) for (let d = 1; d <= 9; d++) {
       const p = positions(board, cand, u, d); if (!p || p.length < 2 || p.length > 3) continue;
       let line = -1;
@@ -414,26 +437,37 @@ const Engine = (() => {
       const bit = 1 << d, el = [];
       for (const i of UNITS[line]) if (!board[i] && BI[i] !== u - 18 && (cand[i] & bit)) el.push({ i, d });
       if (!el.length) continue;
-      return { kind: 'elim', tech: p.length === 2 ? 'Pointing Pair' : 'Pointing Triple', level: 2, units: [u, line], nudgeUnits: [u], cells: p, digits: [d], elims: el,
-        nudge: `Look inside ${B(uName(u))}. Where can the ${B(d)} go?`,
-        text: `In ${B(uName(u))}, the ${d} can only go in ${list(p.map(cName))}, and they all lie in ${B(uName(line))}. So the ${d} for ${uName(line)} must come from this box, which means no other cell in ${uName(line)} can be ${d}. Remove ${elimList(el)}.` };
+      const lt = uType(line);
+      const s = emit(out, { kind: 'elim', tech: p.length === 2 ? 'Pointing Pair' : 'Pointing Triple', level: 2, units: [u, line], nudgeUnits: [u], cells: p, digits: [d], elims: el,
+        nudge: `Look inside ${B(uName(u))}. Where can the ${B(d)} go? Notice how those spots line up.`,
+        text: OL([
+          `${cap(uName(u))} still needs a ${d}. Inside this box, the ${d} can only go in ${cellsOr(p)}.`,
+          `${p.length === 2 ? 'Both' : 'All three'} of those cells sit in ${B(uName(line))}. So whichever one gets the ${d}, the ${d} for ${uName(line)} will be inside ${uName(u)}.`,
+          `A ${lt} can only hold one ${d}. So the cells of ${uName(line)} outside this box can't be ${d}.`
+        ]) + crossOut(el) });
+      if (s) return s;
     }
     return null;
   }
-  function claiming(board, cand) {
+  function claiming(board, cand, out) {
     for (let u = 0; u < 18; u++) for (let d = 1; d <= 9; d++) {
       const p = positions(board, cand, u, d); if (!p || p.length < 2 || p.length > 3) continue;
       const bx = BI[p[0]]; if (!p.every(i => BI[i] === bx)) continue;
       const bit = 1 << d, el = [];
       for (const i of UNITS[18 + bx]) if (!board[i] && !UNITS[u].includes(i) && (cand[i] & bit)) el.push({ i, d });
       if (!el.length) continue;
-      return { kind: 'elim', tech: 'Box/Line Reduction', level: 2, units: [u, 18 + bx], nudgeUnits: [u], cells: p, digits: [d], elims: el,
-        nudge: `Look along ${B(uName(u))}. Where can the ${B(d)} go?`,
-        text: `In ${B(uName(u))}, the ${d} can only go in ${list(p.map(cName))}, all inside ${B(uName(18 + bx))}. So the box's ${d} has to sit in this ${uType(u)}, and the other cells of ${uName(18 + bx)} can't be ${d}. Remove ${elimList(el)}.` };
+      const s = emit(out, { kind: 'elim', tech: 'Box/Line Reduction', level: 2, units: [u, 18 + bx], nudgeUnits: [u], cells: p, digits: [d], elims: el,
+        nudge: `Look along ${B(uName(u))}. Where can the ${B(d)} go? Notice which box those spots are in.`,
+        text: OL([
+          `${cap(uName(u))} still needs a ${d}, and it can only go in ${cellsOr(p)}.`,
+          `Those cells are all inside ${B(uName(18 + bx))}. So the ${d} for ${uName(u)} will end up inside that box.`,
+          `A box can only hold one ${d}. So the box's other cells, the ones not in this ${uType(u)}, can't be ${d}.`
+        ]) + crossOut(el) });
+      if (s) return s;
     }
     return null;
   }
-  function nakedSubset(board, cand, k) {
+  function nakedSubset(board, cand, k, out) {
     for (let u = 0; u < 27; u++) {
       const pool = UNITS[u].filter(i => !board[i] && pop(cand[i]) >= 2 && pop(cand[i]) <= k);
       if (pool.length < k) continue;
@@ -442,15 +476,25 @@ const Engine = (() => {
         const el = [];
         for (const i of UNITS[u]) if (!board[i] && !cb.includes(i)) for (const d of digs(cand[i] & uni)) el.push({ i, d });
         if (!el.length) continue;
-        const ds = digs(uni), name = k === 2 ? 'Naked Pair' : 'Naked Triple';
-        return { kind: 'elim', tech: name, level: 2, units: [u], cells: cb, digits: ds, elims: el,
-          nudge: `Look at ${B(uName(u))}. Find ${k} cells that share the same ${k} candidates.`,
-          text: `In ${B(uName(u))}, the cells ${list(cb.map(cName))} can only contain ${list(ds)}. That's ${k} cells for ${k} digits, so those digits are locked into these cells and no other cell in ${uName(u)} can have them. Remove ${elimList(el)}.` };
+        const ds = digs(uni);
+        const steps = k === 2 ? [
+          `In ${B(uName(u))}, the cells ${cells(cb)} can each only be ${list(ds, 'or')}.`,
+          `Two cells, two digits: one cell will be ${ds[0]} and the other ${ds[1]}. We don't know which way round yet, and it doesn't matter.`,
+          `Either way, the ${ds[0]} and the ${ds[1]} of ${uName(u)} are used up by these two cells. So no other cell in ${uName(u)} can be ${ds[0]} or ${ds[1]}.`
+        ] : [
+          `In ${B(uName(u))}, the cells ${cells(cb)} only have the digits ${list(ds)} between them.`,
+          `Three cells, three digits: these cells will hold exactly ${list(ds)}, in some order.`,
+          `So ${list(ds)} are used up in ${uName(u)}, and no other cell there can have them.`
+        ];
+        const s = emit(out, { kind: 'elim', tech: k === 2 ? 'Naked Pair' : 'Naked Triple', level: 2, units: [u], cells: cb, digits: ds, elims: el,
+          nudge: `In ${B(uName(u))}, look for ${k === 2 ? 'two' : 'three'} cells whose options are limited to the same ${k} digits.`,
+          text: OL(steps) + crossOut(el) });
+        if (s) return s;
       }
     }
     return null;
   }
-  function hiddenPair(board, cand) {
+  function hiddenPair(board, cand, out) {
     for (let u = 0; u < 27; u++) for (let a = 1; a <= 8; a++) {
       const pa = positions(board, cand, u, a); if (!pa || pa.length !== 2) continue;
       for (let b = a + 1; b <= 9; b++) {
@@ -458,14 +502,19 @@ const Engine = (() => {
         const mask = (1 << a) | (1 << b), el = [];
         for (const i of pa) for (const d of digs(cand[i] & ~mask)) el.push({ i, d });
         if (!el.length) continue;
-        return { kind: 'elim', tech: 'Hidden Pair', level: 2, units: [u], cells: pa, digits: [a, b], elims: el,
-          nudge: `Look at ${B(uName(u))}. Two of its missing digits can only go in the same two cells.`,
-          text: `In ${B(uName(u))}, the digits ${a} and ${b} can only go in ${cName(pa[0])} and ${cName(pa[1])}. Those two cells must hold ${a} and ${b} between them, so their other candidates can go. Remove ${elimList(el)}.` };
+        const s = emit(out, { kind: 'elim', tech: 'Hidden Pair', level: 2, units: [u], cells: pa, digits: [a, b], elims: el,
+          nudge: `In ${B(uName(u))}, two of the missing digits can only fit in the same two cells. Can you spot them?`,
+          text: OL([
+            `In ${B(uName(u))}, the ${a} can only go in ${cellsOr(pa)}. The ${b} can only go in those same two cells.`,
+            `So these two cells are reserved: one will be ${a} and the other ${b}. There's no room left for anything else.`,
+            `That means any other options in these two cells are impossible.`
+          ]) + crossOut(el) });
+        if (s) return s;
       }
     }
     return null;
   }
-  function xWing(board, cand) {
+  function xWing(board, cand, out) {
     for (let d = 1; d <= 9; d++) {
       const bit = 1 << d;
       for (const base of [0, 9]) {
@@ -477,16 +526,23 @@ const Engine = (() => {
           const corners = [...A.p, ...Q.p], el = [];
           for (const x of A.x) for (const i of UNITS[cross + x]) if (!board[i] && !corners.includes(i) && (cand[i] & bit)) el.push({ i, d });
           if (!el.length) continue;
-          const lines = base === 0 ? 'rows' : 'columns', crossN = base === 0 ? 'columns' : 'rows';
-          return { kind: 'elim', tech: 'X-Wing', level: 3, units: [A.u, Q.u, cross + A.x[0], cross + A.x[1]], nudgeUnits: [A.u, Q.u], cells: corners, digits: [d], elims: el,
-            nudge: `Compare ${B(uName(A.u))} and ${B(uName(Q.u))}. Where can the ${B(d)} go in each?`,
-            text: `In both ${B(uName(A.u))} and ${B(uName(Q.u))}, the ${d} can only go in ${crossN} ${A.x[0] + 1} and ${A.x[1] + 1}. These four corners form an X-Wing: the two ${d}s must sit on opposite corners, so those ${crossN} get their ${d} from these ${lines}. Remove ${d} from the rest of the two ${crossN}: ${elimList(el)}.` };
+          const lt = base === 0 ? 'row' : 'column', ct = base === 0 ? 'column' : 'row';
+          const c1 = `${ct} ${A.x[0] + 1}`, c2 = `${ct} ${A.x[1] + 1}`;
+          const s = emit(out, { kind: 'elim', tech: 'X-Wing', level: 3, units: [A.u, Q.u, cross + A.x[0], cross + A.x[1]], nudgeUnits: [A.u, Q.u], cells: corners, digits: [d], elims: el,
+            nudge: `Compare ${B(uName(A.u))} and ${B(uName(Q.u))}. In each, the ${B(d)} has only two possible spots, and those spots line up.`,
+            text: OL([
+              `In ${B(uName(A.u))}, the ${d} can only go in ${c1} or ${c2}. The same is true in ${B(uName(Q.u))}.`,
+              `Picture the four highlighted corners as a rectangle. Each ${lt} needs its ${d} in one of its two corners, and the two ${lt}s can't use the same ${ct}, because a ${ct} can't hold two ${d}s. So the ${d}s sit on opposite corners: one diagonal or the other.`,
+              `Whichever diagonal it is, ${c1} gets its ${d} from one of these corners, and so does ${c2}.`,
+              `So no other cell in ${c1} or ${c2} can be ${d}.`
+            ]) + crossOut(el) });
+          if (s) return s;
         }
       }
     }
     return null;
   }
-  function yWing(board, cand) {
+  function yWing(board, cand, out) {
     const bv = []; for (let i = 0; i < 81; i++) if (!board[i] && pop(cand[i]) === 2) bv.push(i);
     for (const pv of bv) {
       const [x, y] = digs(cand[pv]);
@@ -499,38 +555,66 @@ const Engine = (() => {
           const el = [];
           for (let i = 0; i < 81; i++) if (!board[i] && i !== pv && i !== a && i !== b && sees(i, a) && sees(i, b) && (cand[i] & (1 << z))) el.push({ i, d: z });
           if (!el.length) continue;
-          return { kind: 'elim', tech: 'Y-Wing', level: 3, units: [], cells: [pv, a, b], nudgeCells: [pv, a, b], digits: [p, q, z], elims: el,
-            nudge: `Study the three highlighted cells. Each has exactly two candidates, and they're linked.`,
-            text: `${B(cName(pv))} is either ${p} or ${q}. If it's ${p}, then ${cName(a)} (${p} or ${z}) must be ${z}. If it's ${q}, then ${cName(b)} (${q} or ${z}) must be ${z}. Either way one of those two cells is ${B(z)}, so any cell that sees both of them can't be ${z}. Remove ${elimList(el)}.` };
+          const s = emit(out, { kind: 'elim', tech: 'Y-Wing', level: 3, units: [], cells: [pv, a, b], nudgeCells: [pv, a, b], digits: [p, q, z], elims: el,
+            nudge: `Study the three highlighted cells. Each has exactly two options, and they're linked like a hinge.`,
+            text: P(`Three highlighted cells each have just two options:`) +
+              `<ul><li>${B(cName(pv))} (the middle, or "pivot"): ${p} or ${q}</li><li>${B(cName(a))}: ${p} or ${z}</li><li>${B(cName(b))}: ${q} or ${z}</li></ul>` +
+              OL([
+                `If the pivot is ${p}: ${cName(a)} shares a ${shared(pv, a)} with it, so it can't also be ${p}. That makes ${cName(a)} = ${z}.`,
+                `If the pivot is ${q}: ${cName(b)} shares a ${shared(pv, b)} with it, so it can't be ${q}. That makes ${cName(b)} = ${z}.`,
+                `The pivot must be one or the other, so at least one of ${cName(a)} and ${cName(b)} will be ${z}.`,
+                `Any cell that shares a row, column or box with both of them would clash with that ${z}, so it can't be ${z}.`
+              ]) + crossOut(el) });
+          if (s) return s;
         }
       }
     }
     return null;
   }
-  const findElim = (b, c) => pointing(b, c) || claiming(b, c) || nakedSubset(b, c, 2) || hiddenPair(b, c) || nakedSubset(b, c, 3) || xWing(b, c) || yWing(b, c);
+  const TECHS = [
+    (b, c, o) => pointing(b, c, o), (b, c, o) => claiming(b, c, o), (b, c, o) => nakedSubset(b, c, 2, o),
+    (b, c, o) => hiddenPair(b, c, o), (b, c, o) => nakedSubset(b, c, 3, o), (b, c, o) => xWing(b, c, o), (b, c, o) => yWing(b, c, o)
+  ];
+  function findElim(b, c) { for (const t of TECHS) { const s = t(b, c); if (s) return s; } return null; }
+  function findAllElims(b, c) { const out = []; for (const t of TECHS) t(b, c, out); return out; }
 
   /* ---------- "What if" forcing ---------- */
-  function contradiction(board, cand, i, d) {
-    const b = board.slice(), c = cand.slice(); place(b, c, i, d);
+  function tryAssume(board, cand, i, d) {
+    const b = board.slice(), c = cand.slice(), trail = [];
+    place(b, c, i, d);
     for (let n = 0; n < 81; n++) {
-      for (let j = 0; j < 81; j++) if (!b[j] && !c[j]) return `${cName(j)} would be left with no possible digit`;
-      for (let u = 0; u < 27; u++) for (let e = 1; e <= 9; e++) { const p = positions(b, c, u, e); if (p && !p.length) return `${uName(u)} would have nowhere left for a ${e}`; }
-      const q = quickSingle(b, c); if (!q) return null; place(b, c, q[0], q[1]);
+      for (let j = 0; j < 81; j++) if (!b[j] && !c[j]) return { why: `${B(cName(j))} would have no digit left that it could be`, trail, deadCells: [j], deadUnit: -1 };
+      for (let u = 0; u < 27; u++) for (let e = 1; e <= 9; e++) {
+        const p = positions(b, c, u, e);
+        if (p && !p.length) return { why: `${B(uName(u))} would have no place left for its ${e}`, trail, deadCells: [], deadUnit: u };
+      }
+      const q = quickSingle(b, c); if (!q) return null;
+      trail.push({ i: q[0], d: q[1], reason: q[2] });
+      place(b, c, q[0], q[1]);
     }
     return null;
   }
   function findForcing(board, cand) {
-    const bv = []; for (let i = 0; i < 81; i++) if (!board[i] && pop(cand[i]) === 2) bv.push(i);
-    for (const i of bv) {
+    let best = null;
+    for (let i = 0; i < 81; i++) {
+      if (board[i] || pop(cand[i]) !== 2) continue;
       const [a, b] = digs(cand[i]);
       for (const [bad, good] of [[a, b], [b, a]]) {
-        const why = contradiction(board, cand, i, bad);
-        if (why) return { kind: 'place', tech: 'Forcing (What If)', level: 4, cell: i, digit: good, units: [], cells: [], nudgeCells: [i], digits: [good], elims: [],
-          nudge: `No simple pattern here, so try a "what if" test on ${B(cName(i))}, which has only two candidates.`,
-          text: `${B(cName(i))} can only be ${bad} or ${good}. Suppose it were ${bad}. Filling in the singles that follow, ${why}. That's impossible, so ${cName(i)} must be ${B(good)}.` };
+        const r = tryAssume(board, cand, i, bad);
+        if (r && (!best || r.trail.length < best.r.trail.length)) best = { i, bad, good, r };
       }
     }
-    return null;
+    if (!best) return null;
+    const { i, bad, good, r } = best, t = r.trail;
+    const shown = t.length > 7 ? [...t.slice(0, 4), null, ...t.slice(-2)] : t;
+    const items = [`Suppose ${B(cName(i))} = ${bad}.`];
+    for (const s of shown) items.push(s ? `Then ${B(cName(s.i))} = ${s.d}, because ${s.reason}.` : `…this forces ${t.length - 6} more moves in the same way…`);
+    items.push(`But now ${r.why}. That's impossible!`);
+    return { kind: 'place', tech: 'Forcing (What If)', level: 4, cell: i, digit: good,
+      units: r.deadUnit >= 0 ? [r.deadUnit] : [], cells: [...t.map(s => s.i), ...r.deadCells], nudgeCells: [i], digits: [good], elims: [],
+      nudge: `No simple pattern works here. Try a "what if" test on ${B(cName(i))}: it has only two options, ${bad} and ${good}.`,
+      text: P(`No simple pattern works here, so let's test an idea. ${B(cName(i))} can only be ${bad} or ${good}. <b>What if it were ${bad}?</b> Follow the chain of forced moves:`) +
+        OL(items) + P(`Guessing ${bad} leads to a dead end. <b>So:</b> ${B(cName(i))} must be ${B(good)}.`) };
   }
 
   /* ---------- Grading & generation ---------- */
@@ -569,26 +653,38 @@ const Engine = (() => {
   }
 
   /* ---------- Hint builder ---------- */
+  // Picks the elimination that unlocks a placement soonest (easiest technique on ties),
+  // so the coach's chain of steps stays short and focused.
+  function pickElim(b, c) {
+    const all = findAllElims(b, c); if (!all.length) return null;
+    let pick = null;
+    for (const e of all) {
+      const c2 = c.slice(); for (const { i, d } of e.elims) c2[i] &= ~(1 << d);
+      if (findSingle(b, c2) && (!pick || e.level < pick.level)) pick = e;
+    }
+    return pick || all[0];
+  }
   function buildHint(board, solution, given) {
     const wrong = [];
     for (let i = 0; i < 81; i++) if (!given[i] && board[i] && board[i] !== solution[i]) wrong.push(i);
     if (wrong.length) return [{ kind: 'mistake', tech: 'Check your work', level: 0, units: [], cells: wrong, digits: [], elims: [], nudge: '',
       text: wrong.length === 1
-        ? `The ${B(board[wrong[0]])} in ${B(cName(wrong[0]))} doesn't fit with the rest of the puzzle. It may look fine now, but it will cause a clash later. Clear it, then ask me again.`
-        : `These cells hold digits that don't fit the solution: ${B(list(wrong.map(cName)))}. Clear them, then ask me again.` }];
+        ? P(`The ${B(board[wrong[0]])} in ${B(cName(wrong[0]))} doesn't fit with the rest of the puzzle. It may not clash with anything yet, but it will lead to a dead end later.`) + P(`Clear it, then ask me again and I'll show you a move that's certain.`)
+        : P(`These cells hold digits that don't fit with the rest of the puzzle: ${cells(wrong)}. They may not clash yet, but they'll lead to a dead end later.`) + P(`Clear them, then ask me again.`) }];
     if (!board.includes(0)) return [];
     const b = board.slice(), c = computeCands(b), steps = [];
     for (let k = 0; k < 40; k++) {
       const s = findSingle(b, c); if (s) { s.snap = c.slice(); steps.push(s); return steps; }
-      const e = findElim(b, c); if (e) { e.snap = c.slice(); steps.push(e); for (const { i, d } of e.elims) c[i] &= ~(1 << d); continue; }
+      const e = pickElim(b, c); if (e) { e.snap = c.slice(); steps.push(e); for (const { i, d } of e.elims) c[i] &= ~(1 << d); continue; }
       const f = findForcing(b, c); if (f) { f.snap = c.slice(); steps.push(f); return steps; }
       break;
     }
     let best = -1, bn = 10;
     for (let i = 0; i < 81; i++) if (!b[i]) { const n = pop(c[i]); if (n < bn) { bn = n; best = i; } }
     steps.push({ kind: 'place', tech: 'Reveal', level: 5, cell: best, digit: solution[best], units: [], cells: [], nudgeCells: [best], digits: [solution[best]], elims: [], snap: c.slice(),
-      nudge: `This spot needs a very long chain of reasoning. Let's reveal one cell to get you moving.`,
-      text: `The next deduction is beyond my step-by-step toolkit, so here's a free cell: ${B(cName(best))} is ${B(solution[best])}. Fill it in and the simpler logic should open up again.` });
+      nudge: `This position needs a very long chain of reasoning. Let's reveal one cell to get you moving again.`,
+      text: P(`At this point every cell still has several options, and the next deduction needs a long chain of "what if" reasoning that's hard to follow step by step.`) +
+        P(`Rather than leave you stuck, here's a free number: ${B(cName(best))} is ${B(solution[best])}. Simpler techniques usually start working again after this.`) });
     return steps;
   }
 
@@ -604,17 +700,17 @@ const E = Engine, { RI, CI, UNITS, PEERS } = E;
 const $ = s => document.querySelector(s);
 const LV = { easy: 'Easy', medium: 'Intermediate', hard: 'Difficult' };
 const LEARN = {
-  'Hidden Single': 'A digit that has only one possible cell left in a row, column or box.',
-  'Naked Single': 'A cell where only one digit is still possible.',
-  'Pointing Pair': 'If a digit inside a box is confined to one row or column, remove it from the rest of that line.',
-  'Pointing Triple': 'Same as a pointing pair, but with three cells in a line inside the box.',
-  'Box/Line Reduction': 'If a digit in a row or column is confined to one box, remove it from the rest of that box.',
-  'Naked Pair': 'Two cells in a unit with the same two candidates. Those digits are locked in, so remove them elsewhere in the unit.',
-  'Naked Triple': 'Three cells in a unit that share only three candidates between them. Remove those digits elsewhere.',
-  'Hidden Pair': 'Two digits that can only go in the same two cells of a unit. Clear the other candidates from those cells.',
-  'X-Wing': 'A digit confined to the same two columns in two rows (or the same two rows in two columns) forms a rectangle that clears those lines.',
-  'Y-Wing': 'Three two-candidate cells in a hinge. Any cell that sees both "wings" can\'t hold their shared digit.',
-  'Forcing (What If)': 'Try one of two candidates. If it leads to a contradiction, the other one must be right.'
+  'Hidden Single': 'A row, column or box is missing a digit, and there is only one cell where that digit can still fit.',
+  'Naked Single': 'A cell where every digit except one is already used in its row, column or box.',
+  'Pointing Pair': 'Inside a box, the only spots for a digit all line up in one row or column. That digit can then be crossed out from the rest of that line.',
+  'Pointing Triple': 'Like a pointing pair, but with three spots lined up inside the box.',
+  'Box/Line Reduction': 'In a row or column, the only spots for a digit are all inside one box. That digit can then be crossed out from the rest of that box.',
+  'Naked Pair': 'Two cells in the same row, column or box that can only be the same two digits. Those digits are "reserved", so cross them out everywhere else in that area.',
+  'Naked Triple': 'Like a naked pair, but three cells sharing the same three digits between them.',
+  'Hidden Pair': 'Two digits that can only go in the same two cells of a row, column or box. Those cells are reserved for them, so any other options in those cells can go.',
+  'X-Wing': 'A digit with only two spots in each of two rows, and the spots line up in the same two columns, forming a rectangle. That digit can be crossed out from the rest of those columns (or rows, the other way round).',
+  'Y-Wing': 'Three cells with two options each, linked like a hinge. Whatever the middle cell turns out to be, one of the outer cells gets a certain digit, so cells that touch both outer cells can\'t have it.',
+  'Forcing (What If)': 'Pick a cell with only two options and test one. If it leads to an impossible board, the other option must be the right one.'
 };
 const KEY = 'sudoku-coach-v1';
 let S = null, sel = -1, notesMode = false, undoStack = [], hint = null, popCell = -1;
@@ -715,12 +811,14 @@ function renderCoach() {
   let body = '', acts = '';
   if (hint.stage === 0) {
     body = `<p>${h.nudge}</p>${LEARN[h.tech] ? `<p class="learn"><b>${h.tech}:</b> ${LEARN[h.tech]}</p>` : ''}`;
+    if (hint.idx === 0 && n > 1) body += `<p class="learn">This hint takes <b>${n} steps</b>. The first ${n - 1 > 1 ? n - 1 + ' steps narrow' : 'step narrows'} down the options; the last one places a number.</p>`;
+    if (h.kind === 'elim' && hint.idx === 0) body += `<p class="learn"><b>Candidates</b> are the small numbers in a cell: the digits that could still go there. This step crosses some of them out. Tap <b>Candidates</b> below to pencil them all in.</p>`;
     acts = `<button class="btn pri" data-c="explain">Show me why</button>`;
   } else {
-    body = `<p>${h.text}</p>`;
-    if (h.kind === 'elim') body += `<div class="legend"><span><i style="background:var(--pattern)"></i>Key cells</span><span><b style="color:var(--good)">${h.digits.join(' ')}</b> key digits</span><span><b style="color:var(--bad);text-decoration:line-through">x</b> removed</span></div>`;
+    body = h.text;
+    if (h.kind === 'elim') body += `<div class="legend"><span><i style="background:var(--pattern)"></i>Key cells</span><span><b style="color:var(--good)">${h.digits.join(' ')}</b> key digits</span><span><b style="color:var(--bad);text-decoration:line-through">x</b> crossed out</span></div>`;
     if (h.kind === 'mistake') acts = `<button class="btn pri" data-c="clear">Clear ${h.cells.length > 1 ? 'them' : 'it'}</button><button class="btn" data-c="close">Leave it</button>`;
-    else if (!last) { body += `<p class="learn">This clears the way for the next step.</p>`; acts = `<button class="btn pri" data-c="next">Next step →</button>`; }
+    else if (!last) { body += `<p class="learn">This doesn't place a number yet. It narrows down the options so the next step can.</p>`; acts = `<button class="btn pri" data-c="next">Next step →</button>`; }
     else if (h.kind === 'place') acts = `<button class="btn pri" data-c="fill">Fill in ${h.digit}</button><button class="btn" data-c="close">I'll do it</button>`;
     else acts = `<button class="btn pri" data-c="close">Got it</button>`;
   }

@@ -1,5 +1,5 @@
 // Offline support: cache the app shell, serve cache-first, refresh in background.
-const CACHE = 'sudoku-coach-v1';
+const CACHE = 'sudoku-coach-v2';
 const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
